@@ -1,5 +1,6 @@
 <template>
     <div>
+        <loading :active.sync="isLoading"></loading>
         <div class="text-right mt-4">
             <button class="btn btn-success" @click="openModal(null)">建立新產品</button>
         </div>
@@ -25,7 +26,7 @@
                         </div>
                         <div class="form-group">
                         <label for="customFile">或 上傳圖片
-                            <i class="fas fa-spinner fa-spin"></i>
+                            <i class="fas fa-spinner fa-spin" v-if="fileUploading"></i>
                         </label>
                         <input type="file" id="customFile" class="form-control"
                             ref="files" @change="fileUpload">
@@ -139,7 +140,9 @@ export default {
             products: [],
             aboutProduct: {},
             isNew: true,
-            imgUrl: "https://muaythaiauthority.com/wp-content/uploads/2014/10/default-img.gif"
+            imgUrl: "https://muaythaiauthority.com/wp-content/uploads/2014/10/default-img.gif",
+            isLoading: false,
+            fileUploading: false
         }
     },
     methods: {
@@ -151,6 +154,7 @@ export default {
             }; 
         },
         getProducts(){
+            this.isLoading = true;
             this.products = [];
             db.collection('products').get()
             .then(data=>{
@@ -159,6 +163,9 @@ export default {
                     item.id = doc.id;
                     this.products.push(item);
                 })
+            })
+            .then(()=>{
+                this.isLoading = false;
             })
         },
         openModal(id){
@@ -179,6 +186,7 @@ export default {
             }
         },
         fileUpload(e){
+            this.fileUploading = true;
             let file = e.target.files[0];
             let storageRef = firebase.storage().ref(`${uuid.v1()}.jpg`).put(file);
             storageRef.on('state_changed',
@@ -188,11 +196,13 @@ export default {
                     storageRef.snapshot.ref.getDownloadURL().then(url=>{
                         this.imgUrl = url;
                         this.aboutProduct.image = url;
+                        this.fileUploading = false;
                     })
                 }
             )
         },
         editProduct(id){
+            this.isLoading = true;
             if(this.isNew){
                 db.collection('products').add({
                     category: this.aboutProduct.category || "",
@@ -209,6 +219,8 @@ export default {
                 .then(()=>{
                     $('#productModal').modal('hide');
                     this.aboutProduct = {};
+                    this.imgUrl = "https://muaythaiauthority.com/wp-content/uploads/2014/10/default-img.gif";
+                    document.getElementById('customFile').value = ""
                     this.getProducts();
                 })
                 .catch((err)=>{
@@ -232,6 +244,8 @@ export default {
                     .then(()=>{
                         $('#productModal').modal('hide');
                         this.aboutProduct = {};
+                        this.imgUrl = "https://muaythaiauthority.com/wp-content/uploads/2014/10/default-img.gif";
+                        document.getElementById('customFile').value = ""
                         this.getProducts();
                     })
                     .catch(err=> console.log(err));
