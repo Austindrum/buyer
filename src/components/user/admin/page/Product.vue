@@ -1,5 +1,6 @@
 <template>
     <div>
+        <FlashMessage :position="'right top'"/>
         <loading :active.sync="isLoading"></loading>
         <div class="text-right mt-4">
             <button class="btn btn-success" @click="openModal(null)">建立新產品</button>
@@ -186,42 +187,79 @@ export default {
             }
         },
         fileUpload(e){
-            this.fileUploading = true;
             let file = e.target.files[0];
-            let storageRef = firebase.storage().ref(`${uuid.v1()}.jpg`).put(file);
-            storageRef.on('state_changed',
-                snapshot=>{ console.log(snapshot) }, 
-                err=>{console.log(err)},
-                done=>{
-                    storageRef.snapshot.ref.getDownloadURL().then(url=>{
-                        this.imgUrl = url;
-                        this.aboutProduct.image = url;
-                        this.fileUploading = false;
-                    })
+            let isValidType = file.name.split('.').some(type=> type.toLowerCase().match('jpg' || 'jepg' || 'png') );
+            if(isValidType){
+                if(file.size < 1024000){
+                    this.fileUploading = true;
+                    let storageRef = firebase.storage().ref(`${uuid.v1()}.jpg`).put(file);
+                    storageRef.on('state_changed',
+                        snapshot=>{ console.log(snapshot) }, 
+                        err=>{console.log(err)},
+                        done=>{
+                            storageRef.snapshot.ref.getDownloadURL().then(url=>{
+                                this.imgUrl = url;
+                                this.aboutProduct.image = url;
+                                this.fileUploading = false;
+                            })
+                        }
+                    )
+                }else{
+                    this.flashMessage.show({
+                        status: 'error',
+                        title: '檔案過大',
+                        message: '檔案太大無法上傳',
+                        blockClass: 'product_msg',
+                        position: 'left top',
+                        x: 60,
+                        y: 150
+                    });
+                    document.getElementById('customFile').value = ""    
                 }
-            )
+            }else{
+                this.flashMessage.show({
+                    status: 'error',
+                    title: '格式錯誤',
+                    message: '請確認您的圖片格式是否正確',
+                    blockClass: 'product_msg',
+                    position: 'left top',
+                    x: 60,
+                    y: 150
+                });
+                document.getElementById('customFile').value = ""
+            }
         },
         editProduct(id){
+            let temp = {
+                category: this.aboutProduct.category || "",
+                content: this.aboutProduct.content || "",
+                description: this.aboutProduct.description || "",
+                image: this.aboutProduct.image || "",
+                is_enabled: this.aboutProduct.is_enabled || 0,
+                num: this.aboutProduct.num || "",
+                origin_price: this.aboutProduct.origin_price || "",
+                price: this.aboutProduct.price || "",
+                title: this.aboutProduct.title || "",
+                unit: this.aboutProduct.unit || "",                
+            }
             this.isLoading = true;
             if(this.isNew){
-                db.collection('products').add({
-                    category: this.aboutProduct.category || "",
-                    content: this.aboutProduct.content || "",
-                    description: this.aboutProduct.description || "",
-                    image: this.aboutProduct.image || "",
-                    is_enabled: this.aboutProduct.is_enabled || 0,
-                    num: this.aboutProduct.num || "",
-                    origin_price: this.aboutProduct.origin_price || "",
-                    price: this.aboutProduct.price || "",
-                    title: this.aboutProduct.title || "",
-                    unit: this.aboutProduct.unit || "",
-                })
+                db.collection('products').add(temp)
                 .then(()=>{
                     $('#productModal').modal('hide');
                     this.aboutProduct = {};
                     this.imgUrl = "https://muaythaiauthority.com/wp-content/uploads/2014/10/default-img.gif";
                     document.getElementById('customFile').value = ""
                     this.getProducts();
+                    this.flashMessage.show({
+                        status: 'success',
+                        title: '新增成功',
+                        message: '',
+                        blockClass: 'product_msg',
+                        position: 'left top',
+                        x: 60,
+                        y: 150
+                    });
                 })
                 .catch((err)=>{
                     console.log(err);
@@ -229,24 +267,22 @@ export default {
             }else{
                 db.collection('products').doc(id).get()
                 .then(data=>{
-                    data.ref.update({
-                        category: this.aboutProduct.category || "",
-                        content: this.aboutProduct.content || "",
-                        description: this.aboutProduct.description || "",
-                        image: this.aboutProduct.image || "",
-                        is_enabled: this.aboutProduct.is_enabled || 0,
-                        num: this.aboutProduct.num || "",
-                        origin_price: this.aboutProduct.origin_price || "",
-                        price: this.aboutProduct.price || "",
-                        title: this.aboutProduct.title || "",
-                        unit: this.aboutProduct.unit || "",    
-                    })
+                    data.ref.update(temp)
                     .then(()=>{
                         $('#productModal').modal('hide');
                         this.aboutProduct = {};
                         this.imgUrl = "https://muaythaiauthority.com/wp-content/uploads/2014/10/default-img.gif";
                         document.getElementById('customFile').value = ""
                         this.getProducts();
+                        this.flashMessage.show({
+                            status: 'success',
+                            title: '更新成功',
+                            message: '再請確認您的商品是否正確',
+                            blockClass: 'product_msg',
+                            position: 'left top',
+                            x: 60,
+                            y: 150
+                        });
                     })
                     .catch(err=> console.log(err));
                 })
@@ -260,5 +296,8 @@ export default {
 </script>
 
 <style lang="scss">
-    
+.product_msg{
+    padding-top: 20px;
+    z-index: 9999;
+}
 </style>
