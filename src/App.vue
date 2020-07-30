@@ -9,5 +9,7 @@ export default {
 }
 </script>
 <style lang="scss">
-
+#app{
+  font-family: 'Microsoft JhengHei';
+}
 </style>

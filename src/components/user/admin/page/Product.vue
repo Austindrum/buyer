@@ -23,7 +23,7 @@
                         <div class="form-group">
                         <label for="image">輸入圖片網址</label>
                         <input type="text" class="form-control" id="image"
-                            placeholder="請輸入圖片連結" v-model="aboutProduct.image">
+                            placeholder="請輸入圖片連結" v-model="aboutProduct.imageUrl">
                         </div>
                         <div class="form-group">
                         <label for="customFile">或 上傳圖片
@@ -108,25 +108,43 @@
                 <th>產品名稱</th>
                 <th>原價</th>
                 <th>售價</th>
-                <th>是否啟用</th>
-                <th>編輯</th>
+                <th class="text-center">是否啟用</th>
+                <th class="text-center">編輯</th>
             </thead>
             <tbody>
-                <tr v-for="item in products" :key="item.id">
+                <tr v-for="item in pageListData" :key="item.id">
                     <td width="120">{{ item.category }}</td>
                     <td>{{ item.title }}</td>
                     <td width="120">{{ item.origin_price }}</td>
                     <td width="120">{{ item.price }}</td>
-                    <td width="120">
-                        <span v-if="item.is_enabled == 1">啟用</span>
-                        <span v-else>未啟用</span>
+                    <td width="120" class="text-center">
+                        <span v-if="item.is_enabled == 1" class="text-success">啟用</span>
+                        <span v-else class="text-danger">未啟用</span>
                     </td>
-                    <td width="120">
-                        <button class="btn btn-outline-primary btn-sm" @click="openModal(item.id)">編輯</button>
+                    <td width="150" class="text-center">
+                        <button class="btn btn-outline-primary btn-sm mr-1" @click="openModal(item.id)">編輯</button>
+                        <button class="btn btn-outline-danger btn-sm" @click="deleteProdoct(item.id)">刪除</button>
                     </td>
                 </tr>
             </tbody>
         </table>
+        <div class="col-sm-12" style="height: 50px">
+            <div class="result">
+                <Paginate 
+                    :page-count="pageNum"
+                    :page-class="'page-item'" 
+                    :page-link-class="'page-link'"
+                    :container-class="'pagination pull-right'" 
+                    :prev-text="'<<'"
+                    :prev-class="'prev-item'" 
+                    :prev-link-class="'page-link'"
+                    :next-text="'>>'" 
+                    :next-class="'next-item'"
+                    :next-link-class="'page-link'"
+                    :click-handler = "pageCallback"
+                />
+            </div>
+        </div>  
     </div>
 </template>
 
@@ -143,7 +161,10 @@ export default {
             isNew: true,
             imgUrl: "https://muaythaiauthority.com/wp-content/uploads/2014/10/default-img.gif",
             isLoading: false,
-            fileUploading: false
+            fileUploading: false,
+            pageSize: 10,
+            pageNum: 1,
+            currentPage: 1
         }
     },
     methods: {
@@ -179,7 +200,7 @@ export default {
                 .then(data=>{
                     let item = data.data();
                     item.id = id;
-                    this.imgUrl = item.image;
+                    this.imgUrl = item.imageUrl;
                     this.aboutProduct = item;
                     $('#productModal').modal('show')
                 })
@@ -188,18 +209,20 @@ export default {
         },
         fileUpload(e){
             let file = e.target.files[0];
-            let isValidType = file.name.split('.').some(type=> type.toLowerCase().match('jpg' || 'jepg' || 'png') );
+            let isValidType = file.name.split('.').some( type=> type.toLowerCase().match('jpg' || 'jepg' || 'png') );
             if(isValidType){
                 if(file.size < 1024000){
                     this.fileUploading = true;
-                    let storageRef = firebase.storage().ref(`${uuid.v1()}.jpg`).put(file);
+                    let photoName = `${uuid.v1()}.jpg`;
+                    let storageRef = firebase.storage().ref(photoName).put(file);
                     storageRef.on('state_changed',
                         snapshot=>{ console.log(snapshot) }, 
                         err=>{console.log(err)},
                         done=>{
                             storageRef.snapshot.ref.getDownloadURL().then(url=>{
                                 this.imgUrl = url;
-                                this.aboutProduct.image = url;
+                                this.aboutProduct.image = photoName;
+                                this.aboutProduct.imageUrl = url;
                                 this.fileUploading = false;
                             })
                         }
@@ -235,6 +258,7 @@ export default {
                 content: this.aboutProduct.content || "",
                 description: this.aboutProduct.description || "",
                 image: this.aboutProduct.image || "",
+                imageUrl: this.aboutProduct.imageUrl || "",
                 is_enabled: this.aboutProduct.is_enabled || 0,
                 num: this.aboutProduct.num || "",
                 origin_price: this.aboutProduct.origin_price || "",
@@ -288,6 +312,56 @@ export default {
                 })
             }
         },
+        deleteProdoct(id){
+            this.isLoading = true;
+            db.collection('products').doc(id).get()
+            .then(data=>{
+                return data.data().image;
+            })
+            .then(image=>{
+                firebase.storage().ref().child(image).delete();
+            })
+            .then(()=>{
+                console.log(id);
+                db.collection('products').doc(id).delete();
+            })
+            .then(()=>{
+                this.getProducts();
+                this.flashMessage.show({
+                    status: 'warning',
+                    title: '刪除成功',
+                    message: '商品刪除成功',
+                    blockClass: 'product_msg',
+                    position: 'left top',
+                    x: 60,
+                    y: 150
+                });
+            })
+        },
+        setPageNum(){
+            this.pageNum = Math.ceil(this.products.length / this.pageSize);
+            this.products.forEach((product,key)=>{
+                this.$set(product, "page", parseInt( key / this.pageSize) + 1);
+                this.$set(product, "num", key + 1);
+            })
+        },
+        pageCallback(num){
+            this.currentPage = num;
+        }
+    },
+    computed: {
+        pageListData: function(){
+            if(this.products && this.products.length > 0){
+                return this.products.filter(x=>{
+                    return x.page === this.currentPage;
+                })
+            }
+        }
+    },
+    watch: {
+        products: function(){
+            this.setPageNum();
+        }
     },
     created() {
         this.getProducts();
